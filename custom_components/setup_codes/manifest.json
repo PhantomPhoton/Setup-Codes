@@ -4,7 +4,7 @@
   "after_dependencies": ["matter", "homekit_controller"],
   "codeowners": ["@PhantomPhoton"],
   "config_flow": true,
-  "dependencies": ["frontend"],
+  "dependencies": ["frontend", "http"],
   "documentation": "https://github.com/PhantomPhoton/Setup-Codes",
   "integration_type": "service",
   "iot_class": "local_push",
