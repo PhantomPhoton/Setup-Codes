@@ -1,0 +1,14 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Setup Codes",
+        "description": "Keeps pairing codes for Matter and HomeKit devices, including devices that have left Home Assistant."
+      }
+    },
+    "abort": {
+      "already_configured": "Setup Codes is already configured.",
+      "single_instance_allowed": "Setup Codes is already configured."
+    }
+  }
+}
