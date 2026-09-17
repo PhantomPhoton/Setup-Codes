@@ -4,6 +4,10 @@ HACS custom integration that keeps pairing / setup codes for Matter and HomeKit 
 
 Home Assistant does not store these codes after commissioning. This integration scans the device registry, caches name / manufacturer / model / serial / area id / native id, and lets you attach the code and notes yourself. Area names are read live from the area registry when the panel lists devices; a removed area shows as its id. If a device leaves Home Assistant, the record stays until you delete it and shows as **Removed**. Status is always live: **Available** / **Unavailable** from entity availability, **Removed** from the device registry. Re-add matching is per protocol (`ha_device_id`, then `native_id`, then serial), so a HomeKit accessory that later joins Matter gets a second row even when serial overlaps.
 
+<img width="1661" height="666" alt="List" src="https://github.com/user-attachments/assets/099aab5e-f642-4a62-9cf9-ad8a9fc3ca42" />
+
+<img width="1702" height="680" alt="Edit Box" src="https://github.com/user-attachments/assets/1906eabb-1458-4a78-8576-528ee73edffc" />
+
 ## Panel
 
 The table columns follow **Settings → Devices**: protocol brand icon, Device (name and labels), Area, Manufacturer, Model, Serial, Status, Setup Code. A copy icon next to a stored code copies it without opening the details dialog. On narrow / mobile the row is three lines (name + area + status, manufacturer / model / serial, setup code + copy) instead of stuffing every column into the secondary line. Sort, grouping, and collapsed groups are remembered in the browser (`localStorage`), like Settings → Devices.
