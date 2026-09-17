@@ -58,3 +58,11 @@ Setup Codes requires a Home Assistant **administrator**, the same privilege need
 ## Storage
 
 Records live in Home Assistant `Store` (`.storage/setup_codes`), not Recorder. Setup codes are not written to logs.
+
+
+# My other Home Assistant custom components
+
+* [S3 Compatible]([https://github.com/PhantomPhoton/Setup-Codes](https://github.com/PhantomPhoton/S3-Compatible)) - Allows self hosted S3 compatible endpoints as Home Assistant backup targets
+* [Matter Extensions](https://github.com/PhantomPhoton/Matter-Extensions) - Provide additional Matter functionality for devices that Home Assistant does not provide yet
+
+  
