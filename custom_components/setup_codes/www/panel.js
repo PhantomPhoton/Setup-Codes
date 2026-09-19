@@ -359,6 +359,37 @@
       .join(",")}`;
   }
 
+  function zwaveDskDigits(raw) {
+    const digits = String(raw || "").replace(/\D/g, "");
+    if (digits.startsWith("90") && digits.length >= 52) {
+      return digits.slice(12, 52);
+    }
+    if (digits.length === 40) {
+      return digits;
+    }
+    return null;
+  }
+
+  function zwavePinFromSetupCode(raw) {
+    const dsk = zwaveDskDigits(raw);
+    return dsk ? dsk.slice(0, 5) : null;
+  }
+
+  function formatZwaveDskOrQr(raw, empty) {
+    const blank = empty === undefined ? "—" : empty;
+    if (raw == null || String(raw).trim() === "") {
+      return blank;
+    }
+    const digits = String(raw).replace(/\D/g, "");
+    if (digits.startsWith("90") && digits.length >= 52) {
+      return digits;
+    }
+    if (digits.length === 40) {
+      return digits.match(/.{5}/g).join("-");
+    }
+    return String(raw).trim();
+  }
+
   function formatSetupCode(protocol, raw, empty) {
     const blank = empty === undefined ? "—" : empty;
     if (raw == null || String(raw).trim() === "") {
@@ -377,14 +408,7 @@
       return stripped;
     }
     if (proto === "zwave") {
-      const digits = stripped.replace(/\D/g, "");
-      if (digits.startsWith("90") && digits.length >= 52) {
-        return digits;
-      }
-      if (digits.length === 40) {
-        return digits.match(/.{5}/g).join("-");
-      }
-      return stripped;
+      return zwavePinFromSetupCode(stripped) || blank;
     }
     if (stripped.toUpperCase().startsWith("MT:")) {
       return stripped;
@@ -1430,20 +1454,42 @@
       }
 
       const inputLabel = document.createElement("label");
-      inputLabel.textContent = "Setup code";
       const input = document.createElement("input");
       input.type = "text";
       input.autocomplete = "off";
       input.spellcheck = false;
-      input.value = formatSetupCode(record.protocol, record.setup_code, "");
-      if ((record.protocol || "matter") === "homekit") {
-        input.placeholder = "X-HM://… or 8-digit HomeKit setup code";
-      } else if (record.protocol === "zwave") {
+      const isZwave = record.protocol === "zwave";
+      if (isZwave) {
+        inputLabel.textContent = "DSK / QR";
+        input.value = formatZwaveDskOrQr(record.setup_code, "");
         input.placeholder = "90… SmartStart QR or 40-digit DSK";
       } else {
-        input.placeholder = "MT:… or 11/21-digit Matter pairing code";
+        inputLabel.textContent = "Setup code";
+        input.value = formatSetupCode(record.protocol, record.setup_code, "");
+        if ((record.protocol || "matter") === "homekit") {
+          input.placeholder = "X-HM://… or 8-digit HomeKit setup code";
+        } else {
+          input.placeholder = "MT:… or 11/21-digit Matter pairing code";
+        }
       }
       inputLabel.append(input);
+
+      let pinLabel;
+      if (isZwave) {
+        pinLabel = document.createElement("label");
+        pinLabel.textContent = "PIN";
+        const pinInput = document.createElement("input");
+        pinInput.type = "text";
+        pinInput.readOnly = true;
+        pinInput.autocomplete = "off";
+        pinInput.spellcheck = false;
+        pinInput.placeholder = "First 5 digits of the DSK";
+        pinInput.value = zwavePinFromSetupCode(record.setup_code) || "";
+        pinLabel.append(pinInput);
+        input.addEventListener("input", () => {
+          pinInput.value = zwavePinFromSetupCode(input.value) || "";
+        });
+      }
 
       const notesLabel = document.createElement("label");
       notesLabel.textContent = "Notes";
@@ -1484,7 +1530,11 @@
         actions.append(remove);
       }
 
-      dialog.append(title, meta, inputLabel, notesLabel, error, actions);
+      dialog.append(title, meta);
+      if (pinLabel) {
+        dialog.append(pinLabel);
+      }
+      dialog.append(inputLabel, notesLabel, error, actions);
       overlay.append(dialog);
       this.append(overlay);
       this._dialog = overlay;
