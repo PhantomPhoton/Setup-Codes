@@ -26,6 +26,10 @@ HomeKit setup codes may be an `X-HM://` QR payload or an **8-digit HAP setup cod
 
 Z-Wave setup codes may be a **40-digit DSK** (`aaaaa-bbbbb-ccccc-ddddd-eeeee-fffff-11111-22222`) or a **SmartStart QR** (digits starting with `90`). The table shows the **5-digit PIN** (first DSK group). The details dialog shows that PIN plus the full DSK / QR. When Z-Wave JS has a DSK for an S2-included node and the field is empty, the DSK is filled in automatically. A user-entered value is left alone. The Z-Wave controller node is not listed.
 
+## Settings
+
+**Settings → Devices & services → Setup Codes → Configure** (or the same toggles during first setup) chooses which protocols to scan: Matter, HomeKit, and Z-Wave. Turning a protocol off stops adding new devices of that type. Records already in the list stay.
+
 ## Installation
 
 You can install this component in two ways: via [HACS](https://github.com/hacs/integration) or manually.

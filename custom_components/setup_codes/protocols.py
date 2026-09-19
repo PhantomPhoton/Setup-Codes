@@ -11,6 +11,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceEntryType
 
 from .const import (
+    DOMAIN,
     ENABLED_PROTOCOLS,
     HOMEKIT_ACCESSORY_ID_KEY,
     HOMEKIT_CONTROLLER_DOMAIN,
@@ -22,6 +23,8 @@ from .const import (
     PROTOCOL_LABELS,
     PROTOCOL_MATTER,
     PROTOCOL_ZWAVE,
+    SCAN_OPTION_BY_PROTOCOL,
+    SCAN_OPTION_DEFAULTS,
     ZWAVE_JS_DOMAIN,
     ZWAVE_PROVISION_ID_PREFIX,
 )
@@ -225,13 +228,32 @@ PLUGINS: dict[str, ProtocolPlugin] = {
 }
 
 
-def enabled_plugins() -> list[ProtocolPlugin]:
-    return [plugin for plugin in PLUGINS.values() if plugin.enabled]
+def enabled_protocols(hass: HomeAssistant) -> tuple[str, ...]:
+    """Protocols the config entry is set to scan. Defaults to all."""
+    entries = hass.config_entries.async_entries(DOMAIN)
+    options = entries[0].options if entries else {}
+    enabled: list[str] = []
+    for protocol in ENABLED_PROTOCOLS:
+        key = SCAN_OPTION_BY_PROTOCOL[protocol]
+        if options.get(key, SCAN_OPTION_DEFAULTS[key]):
+            enabled.append(protocol)
+    return tuple(enabled)
+
+
+def enabled_plugins(hass: HomeAssistant | None = None) -> list[ProtocolPlugin]:
+    if hass is None:
+        return [plugin for plugin in PLUGINS.values() if plugin.enabled]
+    allowed = set(enabled_protocols(hass))
+    return [
+        plugin
+        for plugin in PLUGINS.values()
+        if plugin.enabled and plugin.protocol in allowed
+    ]
 
 
 def scan_all(hass: HomeAssistant) -> list[Snapshot]:
     snapshots: list[Snapshot] = []
-    for plugin in enabled_plugins():
+    for plugin in enabled_plugins(hass):
         if plugin.scan is None:
             continue
         snapshots.extend(plugin.scan(hass))

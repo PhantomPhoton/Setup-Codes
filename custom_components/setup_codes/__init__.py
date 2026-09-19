@@ -36,11 +36,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: SetupCodesConfigEntry) -
     await async_register_panel(hass)
     await manager.async_setup()
 
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     entry.async_on_unload(manager.async_unload)
     entry.async_on_unload(lambda: hass.data.pop(DOMAIN, None))
     entry.async_on_unload(lambda: async_unregister_panel(hass))
     _LOGGER.debug("Setup Codes is set up")
     return True
+
+
+async def _async_update_listener(
+    hass: HomeAssistant, entry: SetupCodesConfigEntry
+) -> None:
+    """Re-scan when protocol options change."""
+    manager = hass.data.get(DOMAIN)
+    if manager is not None:
+        await manager.async_sync()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SetupCodesConfigEntry) -> bool:

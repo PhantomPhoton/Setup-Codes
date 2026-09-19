@@ -3,12 +3,30 @@
     "step": {
       "user": {
         "title": "Setup Codes",
-        "description": "Keeps pairing codes for Matter, HomeKit, and Z-Wave devices, including devices that have left Home Assistant."
+        "description": "Choose which integrations to scan. You can change this later under Configure. Existing records stay if you turn a protocol off.",
+        "data": {
+          "scan_matter": "Scan Matter devices",
+          "scan_homekit": "Scan HomeKit devices",
+          "scan_zwave": "Scan Z-Wave devices"
+        }
       }
     },
     "abort": {
       "already_configured": "Setup Codes is already configured.",
       "single_instance_allowed": "Setup Codes is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Protocols",
+        "description": "Choose which integrations Setup Codes should scan. Existing records stay in the list if you turn a protocol off; new devices of that type are not added.",
+        "data": {
+          "scan_matter": "Scan Matter devices",
+          "scan_homekit": "Scan HomeKit devices",
+          "scan_zwave": "Scan Z-Wave devices"
+        }
+      }
     }
   }
 }
