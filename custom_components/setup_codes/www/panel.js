@@ -9,6 +9,7 @@
 (() => {
   const TAG = "setup-codes-panel";
   const STORE_EVENT = "setup_codes_updated";
+  const QR_LIB_URL = "/setup_codes_static/qr.js?v=0.1.37";
   const TABLE_SORT_KEY = "setup-codes-table-sort";
   const TABLE_GROUP_KEY = "setup-codes-table-grouping";
   const TABLE_COLLAPSE_KEY = "setup-codes-table-collapsed";
@@ -751,6 +752,84 @@
     return null;
   }
 
+  let qrLibPromise;
+
+  function loadQrLibrary() {
+    if (window.SetupCodesQR) {
+      return Promise.resolve(window.SetupCodesQR);
+    }
+    if (qrLibPromise) {
+      return qrLibPromise;
+    }
+    qrLibPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = QR_LIB_URL;
+      script.onload = () => {
+        if (window.SetupCodesQR) {
+          resolve(window.SetupCodesQR);
+        } else {
+          reject(new Error("QR library missing"));
+        }
+      };
+      script.onerror = () => reject(new Error("QR library failed to load"));
+      document.head.append(script);
+    }).catch((err) => {
+      qrLibPromise = undefined;
+      throw err;
+    });
+    return qrLibPromise;
+  }
+
+  function qrPayloadFromSetup(protocol, raw) {
+    const stripped = String(raw || "").trim();
+    if (!stripped) {
+      return null;
+    }
+    const proto = protocol || "matter";
+    if (proto === "matter") {
+      if (!stripped.toUpperCase().startsWith("MT:")) {
+        return null;
+      }
+      if (!matterManualFromMt(stripped)) {
+        return null;
+      }
+      return `MT:${stripped.slice(3).trim()}`;
+    }
+    if (proto === "homekit") {
+      const parsed = parseXhmPayload(stripped);
+      return parsed ? parsed.stored : null;
+    }
+    if (proto === "zwave") {
+      if (validateZwaveSetupCode(stripped)) {
+        return null;
+      }
+      const digits = stripped.replace(/\D/g, "");
+      if (digits.startsWith("90") && digits.length >= 52) {
+        return digits;
+      }
+      if (digits.length === 40) {
+        return digits.match(/.{5}/g).join("-");
+      }
+    }
+    return null;
+  }
+
+  function paintSetupQr(frame, payload) {
+    if (!payload || !window.SetupCodesQR) {
+      frame.hidden = true;
+      frame.replaceChildren();
+      return;
+    }
+    frame.innerHTML = window.SetupCodesQR.renderSVG(payload, {
+      ecc: "M",
+      border: 2,
+      pixelSize: 1,
+      whiteColor: "#ffffff",
+      blackColor: "#000000",
+    });
+    frame.hidden = false;
+  }
+
   function validateMatterManualCode(raw) {
     const stripped = (raw || "").trim();
     if (!stripped) {
@@ -960,6 +1039,7 @@
         return;
       }
       this._build();
+      void loadQrLibrary();
       await this._ensureBrandsToken();
       await this._ensureLabels();
       await this._ensureStoreEvents();
@@ -1769,6 +1849,15 @@
         });
       }
 
+      const qrFrame = document.createElement("div");
+      qrFrame.className = "setup-codes-qr";
+      qrFrame.hidden = true;
+      const refreshQr = () => {
+        paintSetupQr(qrFrame, qrPayloadFromSetup(protocol, input.value));
+      };
+      input.addEventListener("input", refreshQr);
+      void loadQrLibrary().then(refreshQr).catch(() => {});
+
       const notesLabel = document.createElement("label");
       notesLabel.textContent = "Notes";
       const notes = document.createElement("textarea");
@@ -1808,7 +1897,7 @@
         actions.append(remove);
       }
 
-      dialog.append(title, meta);
+      dialog.append(title, meta, qrFrame);
       if (pinLabel) {
         dialog.append(pinLabel);
       }
@@ -1844,6 +1933,8 @@
           box-shadow: var(--ha-card-box-shadow, 0 8px 32px rgba(0,0,0,.3));
           max-width: 420px;
           width: 100%;
+          max-height: calc(100vh - 48px);
+          overflow-y: auto;
           padding: 20px 24px 16px;
           box-sizing: border-box;
         }
@@ -1864,6 +1955,25 @@
         }
         .setup-codes-dialog dd {
           margin: 0;
+        }
+        .setup-codes-qr {
+          display: flex;
+          justify-content: center;
+          margin: 0 auto 16px;
+          background: #fff;
+          border-radius: 12px;
+          padding: 12px;
+          width: 196px;
+          height: 196px;
+          box-sizing: border-box;
+        }
+        .setup-codes-qr[hidden] {
+          display: none;
+        }
+        .setup-codes-qr svg {
+          display: block;
+          width: 100%;
+          height: 100%;
         }
         .setup-codes-dialog a {
           color: var(--primary-color);

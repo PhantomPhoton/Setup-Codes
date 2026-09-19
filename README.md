@@ -18,7 +18,7 @@ The table columns follow **Settings → Devices**: protocol brand icon, Device (
 
 Those widgets are lazy-loaded with the devices dashboard. The panel preloads that config route so they exist even if you have not opened Settings → Devices in this session.
 
-Click a row to set or clear the code, edit notes, and open the matching Home Assistant device page. Delete is only offered for records that are no longer in Home Assistant.
+Click a row to set or clear the code, edit notes, and open the matching Home Assistant device page. Delete is only offered for records that are no longer in Home Assistant. When the stored value is a scannable payload — Matter `MT:`, HomeKit `X-HM://`, a Z-Wave DSK, or a SmartStart `90…` string — the details dialog also shows a QR code. 11-digit / 21-digit Matter codes and 8-digit HomeKit codes are not QR payloads, so no code is drawn for those.
 
 Matter setup codes may be an `MT:` QR payload or an **11- or 21-digit manual pairing code**. The table always shows the **11-digit** code you type when pairing (`XXXX-XXX-XXXX`), extracted from an `MT:` QR or reduced from a 21-digit code (VID/PID dropped, check digit recomputed). The details dialog shows that pairing code plus the full `MT:` / 21-digit value. Manual codes have spaces/dashes stripped on save. The last digit is a Verhoeff checksum and the first digit must match the short vs long form.
 
