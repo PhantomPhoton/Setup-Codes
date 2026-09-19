@@ -9,7 +9,6 @@
 (() => {
   const TAG = "setup-codes-panel";
   const STORE_EVENT = "setup_codes_updated";
-  const QR_LIB_URL = "/setup_codes_static/qr.js?v=0.1.38";
   const TABLE_SORT_KEY = "setup-codes-table-sort";
   const TABLE_GROUP_KEY = "setup-codes-table-grouping";
   const TABLE_COLLAPSE_KEY = "setup-codes-table-collapsed";
@@ -754,6 +753,17 @@
 
   let qrLibPromise;
 
+  function qrLibraryUrl() {
+    const scripts = document.getElementsByTagName("script");
+    for (let index = 0; index < scripts.length; index += 1) {
+      const src = scripts[index].src || "";
+      if (src.includes("/setup_codes_static/panel.js")) {
+        return src.replace("panel.js", "qr.js");
+      }
+    }
+    return "/setup_codes_static/qr.js";
+  }
+
   function loadQrLibrary() {
     if (window.SetupCodesQR) {
       return Promise.resolve(window.SetupCodesQR);
@@ -763,7 +773,7 @@
     }
     qrLibPromise = new Promise((resolve, reject) => {
       const script = document.createElement("script");
-      script.src = QR_LIB_URL;
+      script.src = qrLibraryUrl();
       script.onload = () => {
         if (window.SetupCodesQR) {
           resolve(window.SetupCodesQR);

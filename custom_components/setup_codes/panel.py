@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from homeassistant.components import frontend
@@ -17,6 +18,16 @@ from .const import (
 
 WWW_DIR = Path(__file__).parent / "www"
 _STATIC_REGISTERED = False
+_WWW_FILES = ("panel.js", "qr.js")
+
+
+def static_asset_version() -> str:
+    """Return VERSION plus a short hash of the served JS so browsers refetch it."""
+    digest = hashlib.md5()
+    for name in _WWW_FILES:
+        digest.update((WWW_DIR / name).read_bytes())
+        digest.update(b"\0")
+    return f"{VERSION}-{digest.hexdigest()[:8]}"
 
 
 async def async_register_static(hass: HomeAssistant) -> None:
@@ -59,7 +70,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
                 "embed_iframe": False,
                 "trust_external": False,
                 "handle_safe_area": True,
-                "js_url": f"{PANEL_STATIC_URL_PATH}/panel.js?v={VERSION}",
+                "js_url": f"{PANEL_STATIC_URL_PATH}/panel.js?v={static_asset_version()}",
             }
         },
         require_admin=True,
