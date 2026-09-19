@@ -556,6 +556,64 @@
     return digits;
   }
 
+  const BASE36_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+  function parseXhmPayload(raw) {
+    const stripped = String(raw || "").trim();
+    if (!stripped.toUpperCase().startsWith("X-HM:")) {
+      return null;
+    }
+    const colon = stripped.indexOf(":");
+    let rest = stripped.slice(colon + 1).replace(/^\/+/, "").trim();
+    if (rest.length !== 13) {
+      return null;
+    }
+    const encoded = rest.slice(0, 9).toUpperCase();
+    const setupId = rest.slice(9);
+    let value = 0;
+    for (let index = 0; index < 9; index += 1) {
+      const digit = BASE36_ALPHABET.indexOf(encoded[index]);
+      if (digit < 0) {
+        return null;
+      }
+      value = value * 36 + digit;
+    }
+    if (!/^[0-9A-Za-z]{4}$/.test(setupId)) {
+      return null;
+    }
+    const version = Math.floor(value / 2 ** 43) & 0x7;
+    const reserved = Math.floor(value / 2 ** 39) & 0xf;
+    const bit30 = Math.floor(value / 2 ** 30) & 1;
+    if (version !== 0 || reserved !== 0 || bit30 !== 0) {
+      return null;
+    }
+    const codeInt = value % 2 ** 27;
+    if (codeInt > 99999999) {
+      return null;
+    }
+    const setupCode = String(Math.floor(codeInt)).padStart(8, "0");
+    if (HOMEKIT_INVALID_CODES.has(setupCode)) {
+      return null;
+    }
+    return {
+      setupCode,
+      setupId,
+      stored: `X-HM://${encoded}${setupId}`,
+    };
+  }
+
+  function homekitCodeFromXhm(raw) {
+    const parsed = parseXhmPayload(raw);
+    return parsed ? parsed.setupCode : null;
+  }
+
+  function formatHomekitSetup(digits) {
+    if (!digits || digits.length !== 8) {
+      return digits || "";
+    }
+    return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+  }
+
   function formatSetupCode(protocol, raw, empty) {
     const blank = empty === undefined ? "—" : empty;
     if (raw == null || String(raw).trim() === "") {
@@ -564,12 +622,16 @@
     const stripped = String(raw).trim();
     const proto = protocol || "matter";
     if (proto === "homekit") {
+      const fromQr = homekitCodeFromXhm(stripped);
+      if (fromQr) {
+        return formatHomekitSetup(fromQr);
+      }
       if (stripped.toUpperCase().startsWith("X-HM:")) {
         return stripped;
       }
       const digits = stripped.replace(/\D/g, "");
       if (digits.length === 8) {
-        return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+        return formatHomekitSetup(digits);
       }
       return stripped;
     }
@@ -643,7 +705,9 @@
       return null;
     }
     if (stripped.toUpperCase().startsWith("X-HM:")) {
-      // TODO: validate X-HM:// HAP setup payload and extract the 8-digit setup code
+      if (!homekitCodeFromXhm(stripped)) {
+        return "This is not a valid HomeKit X-HM:// QR payload.";
+      }
       return null;
     }
     const leftover = stripped.replace(/[\d\s.-]/g, "");
@@ -1630,19 +1694,25 @@
       input.type = "text";
       input.autocomplete = "off";
       input.spellcheck = false;
-      const isZwave = record.protocol === "zwave";
+      const protocol = record.protocol || "matter";
       const storedCode = String(record.setup_code || "").trim();
+      const isZwave = protocol === "zwave";
+      const isHomekitQr =
+        protocol === "homekit" && storedCode.toUpperCase().startsWith("X-HM:");
       const isMatterQr =
-        (record.protocol || "matter") === "matter" &&
-        storedCode.toUpperCase().startsWith("MT:");
+        protocol === "matter" && storedCode.toUpperCase().startsWith("MT:");
       const isMatterLong =
-        (record.protocol || "matter") === "matter" &&
+        protocol === "matter" &&
         !isMatterQr &&
         storedCode.replace(/\D/g, "").length === 21;
       if (isZwave) {
         inputLabel.textContent = "DSK / QR";
         input.value = formatZwaveDskOrQr(record.setup_code, "");
         input.placeholder = "90… SmartStart QR or 40-digit DSK";
+      } else if (isHomekitQr) {
+        inputLabel.textContent = "QR";
+        input.value = storedCode;
+        input.placeholder = "X-HM://… HomeKit QR payload";
       } else if (isMatterQr) {
         inputLabel.textContent = "QR";
         input.value = storedCode;
@@ -1654,7 +1724,7 @@
       } else {
         inputLabel.textContent = "Setup code";
         input.value = formatSetupCode(record.protocol, record.setup_code, "");
-        if ((record.protocol || "matter") === "homekit") {
+        if (protocol === "homekit") {
           input.placeholder = "X-HM://… or 8-digit HomeKit setup code";
         } else {
           input.placeholder = "MT:… or 11/21-digit Matter pairing code";
@@ -1663,20 +1733,25 @@
       inputLabel.append(input);
 
       let pinLabel;
-      if (isZwave || isMatterQr || isMatterLong) {
+      if (isZwave || isHomekitQr || isMatterQr || isMatterLong) {
         pinLabel = document.createElement("label");
-        pinLabel.textContent = isZwave ? "PIN" : "Pairing code";
         const pinInput = document.createElement("input");
         pinInput.type = "text";
         pinInput.readOnly = true;
         pinInput.autocomplete = "off";
         pinInput.spellcheck = false;
-        pinInput.placeholder = isZwave
-          ? "First 5 digits of the DSK"
-          : "11-digit code for manual pairing";
         if (isZwave) {
+          pinLabel.textContent = "PIN";
+          pinInput.placeholder = "First 5 digits of the DSK";
           pinInput.value = zwavePinFromSetupCode(record.setup_code) || "";
+        } else if (isHomekitQr) {
+          pinLabel.textContent = "Setup code";
+          pinInput.placeholder = "8-digit code for manual pairing";
+          const digits = homekitCodeFromXhm(record.setup_code);
+          pinInput.value = digits ? formatHomekitSetup(digits) : "";
         } else {
+          pinLabel.textContent = "Pairing code";
+          pinInput.placeholder = "11-digit code for manual pairing";
           const manual = matterPairingFromSetup(record.setup_code);
           pinInput.value = manual ? formatMatterManual(manual) : "";
         }
@@ -1684,6 +1759,9 @@
         input.addEventListener("input", () => {
           if (isZwave) {
             pinInput.value = zwavePinFromSetupCode(input.value) || "";
+          } else if (isHomekitQr) {
+            const digits = homekitCodeFromXhm(input.value);
+            pinInput.value = digits ? formatHomekitSetup(digits) : "";
           } else {
             const manual = matterPairingFromSetup(input.value);
             pinInput.value = manual ? formatMatterManual(manual) : "";

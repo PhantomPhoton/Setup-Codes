@@ -3,7 +3,7 @@
 from typing import Final
 
 DOMAIN: Final = "setup_codes"
-VERSION: Final = "0.1.35"
+VERSION: Final = "0.1.36"
 
 STORAGE_KEY: Final = DOMAIN
 STORAGE_VERSION: Final = 1
