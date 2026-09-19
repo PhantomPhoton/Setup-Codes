@@ -1,9 +1,17 @@
 """Constants for Setup Codes."""
 
+from __future__ import annotations
+
+import json
+from pathlib import Path
 from typing import Final
 
+_MANIFEST: Final = json.loads(
+    Path(__file__).with_name("manifest.json").read_text(encoding="utf-8")
+)
+
 DOMAIN: Final = "setup_codes"
-VERSION: Final = "1.1.0"
+VERSION: Final = str(_MANIFEST["version"])
 
 STORAGE_KEY: Final = DOMAIN
 STORAGE_VERSION: Final = 1
