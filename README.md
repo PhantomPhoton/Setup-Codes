@@ -14,13 +14,13 @@ Which protocols to scan is chosen at install time and can be changed later under
 
 ### Matter
 
-Home Assistant does not keep the pairing code after commissioning, so you store it here. Paste an `MT:` QR payload or the **11-digit** code printed on the device (`XXXX-XXX-XXXX`). A 21-digit code is accepted too; the list shows the 11-digit code you type when pairing. Invalid checksums are rejected.
+Paste an `MT:` QR payload or the **11-digit** code printed on the device (`XXXX-XXX-XXXX`). A 21-digit code is accepted too; the list shows the 11-digit code you type when pairing. Invalid checksums are rejected.
 
 An `MT:` payload also shows a QR in the details dialog. Typed 11- or 21-digit codes do not.
 
 ### HomeKit
 
-Home Assistant does not keep the setup code after pairing. Paste an `X-HM://` QR payload or the **8-digit** code (`XXX-XX-XXX`). Repeating digits, `12345678`, and `87654321` are rejected.
+Paste an `X-HM://` QR payload or the **8-digit** code (`XXX-XX-XXX`). Repeating digits, `12345678`, and `87654321` are rejected.
 
 An `X-HM://` payload also shows a QR in the details dialog. Typed 8-digit codes do not.
 
@@ -40,22 +40,20 @@ You can install this component in two ways: via [HACS](https://github.com/hacs/i
 2. Integrations → ⋮ → Custom repositories
 3. Add https://github.com/PhantomPhoton/Setup-Codes as an Integration
 4. Install "Setup Codes"
-5. Restart Home Assistant
-6. Go to "Settings->Devices & Services".
-7. Click "+ Add Integration".
-8. Search for "Setup Codes"
-9. Select the integration and **Follow setup workflow**
-10. Once finished, it will show up as an available panel for administrators.
 
 ### Option B: Manual installation (custom_component)
 
-1. Copy the `custom_components/setup_codes` directory to your custom_components directory
-2. Restart Home Assistant
-3. Go to "Settings->Devices & Services".
-4. Click "+ Add Integration".
-5. Search for "Setup Codes"
-6. Select the integration and **Follow setup workflow**
-7. Once finished, it will show up as an available panel for administrators.
+1. Copy the `custom_components/setup_codes` directory to your `custom_components` directory
+
+Then, for either option:
+
+1. Restart Home Assistant
+2. Go to **Settings → Devices & services**
+3. Click **+ Add Integration**
+4. Search for **Setup Codes**
+5. Select the integration and follow the setup workflow
+
+Once finished, it shows up as a sidebar panel for administrators.
 
 ## Access
 
@@ -63,7 +61,7 @@ Setup Codes requires a Home Assistant **administrator**, the same privilege need
 
 ## Storage
 
-Records live in Home Assistant `Store` (`.storage/setup_codes`), not Recorder. Setup codes are not written to logs.
+Records live in Home Assistant `Store` (`.storage/setup_codes`), not Recorder. Setup codes are not written to logs. Setup codes are backed up as part of the standard Home Assistant backup system.
 
 ## Thanks
 
