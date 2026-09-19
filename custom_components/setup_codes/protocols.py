@@ -21,7 +21,11 @@ from .const import (
     PROTOCOL_IDENTIFIER_DOMAINS,
     PROTOCOL_LABELS,
     PROTOCOL_MATTER,
+    PROTOCOL_ZWAVE,
+    ZWAVE_JS_DOMAIN,
+    ZWAVE_PROVISION_ID_PREFIX,
 )
+from .zwave_code import canonicalize_dsk
 
 Snapshot = dict[str, Any]
 ScanFn = Callable[[HomeAssistant], list[Snapshot]]
@@ -29,7 +33,7 @@ ScanFn = Callable[[HomeAssistant], list[Snapshot]]
 
 @dataclass(frozen=True)
 class ProtocolPlugin:
-    """One pairing-code protocol (Matter, HomeKit)."""
+    """One pairing-code protocol (Matter, HomeKit, Z-Wave)."""
 
     protocol: str
     label: str
@@ -66,6 +70,7 @@ def native_id_from_identifiers(protocol: str, identifiers: Any) -> str | None:
 
     Matter: `deviceid_…` (not `serial_…`, which is already serial_number).
     HomeKit: `homekit_controller:accessory-id` (`{pairing}:aid:{aid}`).
+    Z-Wave: `{home_id}-{node_id}` (not `provision_…` SmartStart placeholders).
     """
     pairs = _identifier_pairs(identifiers)
     if protocol == PROTOCOL_MATTER:
@@ -83,6 +88,18 @@ def native_id_from_identifiers(protocol: str, identifiers: Any) -> str | None:
             if values:
                 return sorted(values)[0]
         return None
+    if protocol == PROTOCOL_ZWAVE:
+        node_ids = [
+            value
+            for domain, value in pairs
+            if domain == ZWAVE_JS_DOMAIN
+            and not value.startswith(ZWAVE_PROVISION_ID_PREFIX)
+            and value.count("-") == 1
+            and value.replace("-", "", 1).isdigit()
+        ]
+        if node_ids:
+            return sorted(node_ids)[0]
+        return None
     return None
 
 
@@ -96,8 +113,10 @@ def _device_snapshot(
     device: dr.DeviceEntry,
     protocol: str,
     fallback_name: str,
+    *,
+    discovered_setup_code: str | None = None,
 ) -> Snapshot:
-    return {
+    snapshot: Snapshot = {
         "protocol": protocol,
         "ha_device_id": device.id,
         "native_id": native_id_from_identifiers(protocol, device.identifiers),
@@ -107,6 +126,9 @@ def _device_snapshot(
         "serial_number": device.serial_number,
         "area_id": device.area_id,
     }
+    if discovered_setup_code:
+        snapshot["discovered_setup_code"] = discovered_setup_code
+    return snapshot
 
 
 def _scan_protocol(
@@ -132,6 +154,55 @@ def scan_homekit_devices(hass: HomeAssistant) -> list[Snapshot]:
     return _scan_protocol(hass, PROTOCOL_HOMEKIT, "HomeKit device")
 
 
+def _zwave_node(hass: HomeAssistant, device: dr.DeviceEntry) -> Any | None:
+    """Return the live zwave_js node for this device, if the integration is up."""
+    try:
+        from homeassistant.components.zwave_js.helpers import (
+            async_get_node_from_device_id,
+        )
+    except ImportError:
+        return None
+    try:
+        return async_get_node_from_device_id(hass, device.id)
+    except (AttributeError, KeyError, ValueError):
+        return None
+
+
+def _zwave_dsk(node: Any) -> str | None:
+    raw = getattr(node, "dsk", None)
+    if not raw:
+        data = getattr(node, "data", None)
+        if isinstance(data, dict):
+            raw = data.get("dsk")
+    if not raw:
+        return None
+    return canonicalize_dsk(str(raw))
+
+
+def scan_zwave_devices(hass: HomeAssistant) -> list[Snapshot]:
+    """Return cached-field snapshots for included Z-Wave JS nodes."""
+    registry = dr.async_get(hass)
+    snapshots: list[Snapshot] = []
+    for device in registry.devices:
+        if not _is_protocol_device(device, PROTOCOL_ZWAVE):
+            continue
+        if native_id_from_identifiers(PROTOCOL_ZWAVE, device.identifiers) is None:
+            continue
+        node = _zwave_node(hass, device)
+        if node is not None and getattr(node, "is_controller_node", False):
+            continue
+        snapshots.append(
+            _device_snapshot(
+                device,
+                PROTOCOL_ZWAVE,
+                "Z-Wave device",
+                discovered_setup_code=_zwave_dsk(node) if node is not None else None,
+            )
+        )
+    snapshots.sort(key=lambda item: (item["name"] or "").lower())
+    return snapshots
+
+
 PLUGINS: dict[str, ProtocolPlugin] = {
     PROTOCOL_MATTER: ProtocolPlugin(
         protocol=PROTOCOL_MATTER,
@@ -144,6 +215,12 @@ PLUGINS: dict[str, ProtocolPlugin] = {
         label=PROTOCOL_LABELS[PROTOCOL_HOMEKIT],
         enabled=PROTOCOL_HOMEKIT in ENABLED_PROTOCOLS,
         scan=scan_homekit_devices,
+    ),
+    PROTOCOL_ZWAVE: ProtocolPlugin(
+        protocol=PROTOCOL_ZWAVE,
+        label=PROTOCOL_LABELS[PROTOCOL_ZWAVE],
+        enabled=PROTOCOL_ZWAVE in ENABLED_PROTOCOLS,
+        scan=scan_zwave_devices,
     ),
 }
 

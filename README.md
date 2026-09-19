@@ -1,8 +1,8 @@
 # Setup Codes
 
-HACS custom integration that keeps pairing / setup codes for Matter and HomeKit devices and shows them in a sidebar panel.
+HACS custom integration that keeps pairing / setup codes for Matter, HomeKit, and Z-Wave devices and shows them in a sidebar panel.
 
-Home Assistant does not store these codes after commissioning. This integration scans the device registry, caches name / manufacturer / model / serial / area id / native id, and lets you attach the code and notes yourself. Area names are read live from the area registry when the panel lists devices; a removed area shows as its id. If a device leaves Home Assistant, the record stays until you delete it and shows as **Removed**. Status is always live: **Available** / **Unavailable** from entity availability, **Removed** from the device registry. Re-add matching is per protocol (`ha_device_id`, then `native_id`, then serial), so a HomeKit accessory that later joins Matter gets a second row even when serial overlaps.
+Home Assistant does not store Matter or HomeKit codes after commissioning. This integration scans the device registry, caches name / manufacturer / model / serial / area id / native id, and lets you attach the code and notes yourself. For Z-Wave JS nodes included with S2, the DSK is copied in when the setup-code field is empty. Area names are read live from the area registry when the panel lists devices; a removed area shows as its id. If a device leaves Home Assistant, the record stays until you delete it and shows as **Removed**. Status is always live: **Available** / **Unavailable** from entity availability, **Removed** from the device registry. Re-add matching is per protocol (`ha_device_id`, then `native_id`, then serial), so a HomeKit accessory that later joins Matter gets a second row even when serial overlaps.
 
 <img width="1661" height="666" alt="List" src="https://github.com/user-attachments/assets/099aab5e-f642-4a62-9cf9-ad8a9fc3ca42" />
 
@@ -23,6 +23,8 @@ Click a row to set or clear the code, edit notes, and open the matching Home Ass
 Matter setup codes may be an `MT:` QR payload (stored as-is, not validated yet) or an **11- or 21-digit manual pairing code**. Manual codes have spaces/dashes stripped on save; 11-digit codes are shown as `XXXX-XXX-XXXX` in the panel. The last digit is a Verhoeff checksum and the first digit must match the short vs long form.
 
 HomeKit setup codes may be an `X-HM://` QR payload (stored as-is, not validated yet) or an **8-digit HAP setup code**. Digits are stored without dashes and shown as `XXX-XX-XXX`. Spec-invalid codes (repeating digits, `12345678`, `87654321`) are rejected. Clearing either field is allowed.
+
+Z-Wave setup codes may be a **40-digit DSK** (`aaaaa-bbbbb-ccccc-ddddd-eeeee-fffff-11111-22222`) or a **SmartStart QR** (digits starting with `90`). When Z-Wave JS has a DSK for an S2-included node and the field is empty, the DSK is filled in automatically. A user-entered value is left alone. The Z-Wave controller node is not listed.
 
 ## Installation
 

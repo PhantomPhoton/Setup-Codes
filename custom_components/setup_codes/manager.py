@@ -67,7 +67,7 @@ def _cache_key(record: dict[str, Any]) -> tuple[Any, ...]:
 
 
 def _apply_snapshot(record: dict[str, Any], snapshot: dict[str, Any]) -> bool:
-    """Update cached HA fields. Never touches setup_code or notes."""
+    """Update cached HA fields. Fills an empty setup_code from a discovered DSK."""
     before = _cache_key(record)
     record["ha_device_id"] = snapshot.get("ha_device_id")
     record["native_id"] = snapshot.get("native_id")
@@ -78,7 +78,12 @@ def _apply_snapshot(record: dict[str, Any], snapshot: dict[str, Any]) -> bool:
     record["area_id"] = snapshot.get("area_id")
     record.pop("area_name", None)
     record.pop("identifiers", None)
-    if _cache_key(record) == before:
+    changed = _cache_key(record) != before
+    discovered = snapshot.get("discovered_setup_code")
+    if discovered and not record.get("setup_code"):
+        record["setup_code"] = discovered
+        changed = True
+    if not changed:
         return False
     record["updated_at"] = _utcnow()
     return True
@@ -97,7 +102,7 @@ def _new_record(snapshot: dict[str, Any]) -> dict[str, Any]:
         "model": snapshot.get("model"),
         "serial_number": snapshot.get("serial_number"),
         "area_id": snapshot.get("area_id"),
-        "setup_code": None,
+        "setup_code": snapshot.get("discovered_setup_code"),
         "notes": None,
         "created_at": now,
         "updated_at": now,

@@ -23,6 +23,7 @@
   const PROTOCOL_BRAND_DOMAIN = {
     matter: "matter",
     homekit: "homekit_controller",
+    zwave: "zwave_js",
   };
 
   const columns = (panel) => {
@@ -375,6 +376,16 @@
       }
       return stripped;
     }
+    if (proto === "zwave") {
+      const digits = stripped.replace(/\D/g, "");
+      if (digits.startsWith("90") && digits.length >= 52) {
+        return digits;
+      }
+      if (digits.length === 40) {
+        return digits.match(/.{5}/g).join("-");
+      }
+      return stripped;
+    }
     if (stripped.toUpperCase().startsWith("MT:")) {
       return stripped;
     }
@@ -451,6 +462,33 @@
     }
     if (HOMEKIT_INVALID_CODES.has(digits)) {
       return "This is not a valid HomeKit setup code.";
+    }
+    return null;
+  }
+
+  function validateZwaveSetupCode(raw) {
+    const stripped = (raw || "").trim();
+    if (!stripped) {
+      return null;
+    }
+    const leftover = stripped.replace(/[\d\s.-]/g, "");
+    const digits = stripped.replace(/\D/g, "");
+    if (digits.startsWith("90") && digits.length >= 52) {
+      if (leftover) {
+        return "Z-Wave SmartStart QR codes are digits starting with 90 (spaces are OK).";
+      }
+      return null;
+    }
+    if (leftover) {
+      return "Z-Wave setup codes are a 40-digit DSK (8 groups of 5) or a 90… QR.";
+    }
+    if (digits.length !== 40) {
+      return "Z-Wave setup codes are a 40-digit DSK (8 groups of 5) or a 90… QR.";
+    }
+    for (let index = 0; index < 40; index += 5) {
+      if (Number(digits.slice(index, index + 5)) > 65535) {
+        return "This is not a valid Z-Wave DSK.";
+      }
     }
     return null;
   }
@@ -1400,6 +1438,8 @@
       input.value = formatSetupCode(record.protocol, record.setup_code, "");
       if ((record.protocol || "matter") === "homekit") {
         input.placeholder = "X-HM://… or 8-digit HomeKit setup code";
+      } else if (record.protocol === "zwave") {
+        input.placeholder = "90… SmartStart QR or 40-digit DSK";
       } else {
         input.placeholder = "MT:… or 11/21-digit Matter pairing code";
       }
@@ -1586,6 +1626,8 @@
         clientError = validateMatterManualCode(setupCode);
       } else if (protocol === "homekit") {
         clientError = validateHomekitSetupCode(setupCode);
+      } else if (protocol === "zwave") {
+        clientError = validateZwaveSetupCode(setupCode);
       }
       if (clientError) {
         if (errorEl) {

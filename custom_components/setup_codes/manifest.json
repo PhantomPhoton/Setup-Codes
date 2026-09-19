@@ -1,7 +1,7 @@
 {
   "domain": "setup_codes",
   "name": "Setup Codes",
-  "after_dependencies": ["matter", "homekit_controller"],
+  "after_dependencies": ["matter", "homekit_controller", "zwave_js"],
   "codeowners": ["@PhantomPhoton"],
   "config_flow": true,
   "dependencies": ["frontend", "http"],
@@ -10,5 +10,5 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/PhantomPhoton/Setup-Codes/issues",
   "single_config_entry": true,
-  "version": "1.0.0"
+  "version": "1.1.0"
 }

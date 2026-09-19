@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .const import PROTOCOL_HOMEKIT, PROTOCOL_MATTER
+from .const import PROTOCOL_HOMEKIT, PROTOCOL_MATTER, PROTOCOL_ZWAVE
 
 # Dihedral D5 multiplication, permutation, and inverse tables (Verhoeff).
 _D = (
@@ -140,4 +140,8 @@ def normalize_setup_code(protocol: str, setup_code: str | None) -> str | None:
         from .homekit_code import validate_homekit_setup_code
 
         return validate_homekit_setup_code(cleaned)
+    if protocol == PROTOCOL_ZWAVE:
+        from .zwave_code import validate_zwave_setup_code
+
+        return validate_zwave_setup_code(cleaned)
     return cleaned

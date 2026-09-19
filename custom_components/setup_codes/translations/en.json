@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Setup Codes",
-        "description": "Keeps pairing codes for Matter and HomeKit devices, including devices that have left Home Assistant."
+        "description": "Keeps pairing codes for Matter, HomeKit, and Z-Wave devices, including devices that have left Home Assistant."
       }
     },
     "abort": {
