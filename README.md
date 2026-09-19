@@ -61,6 +61,9 @@ Setup Codes requires a Home Assistant **administrator**, the same privilege need
 
 Records live in Home Assistant `Store` (`.storage/setup_codes`), not Recorder. Setup codes are not written to logs.
 
+## Thanks
+
+QR codes in the panel are generated with [uqr](https://github.com/unjs/uqr) (MIT), which builds on [Nayuki’s QR Code generator](https://www.nayuki.io/page/qr-code-generator-library). Thanks to Project Nayuki and Anthony Fu.
 
 # My other Home Assistant custom components
 
