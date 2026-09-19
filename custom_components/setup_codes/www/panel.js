@@ -9,7 +9,7 @@
 (() => {
   const TAG = "setup-codes-panel";
   const STORE_EVENT = "setup_codes_updated";
-  const QR_LIB_URL = "/setup_codes_static/qr.js?v=0.1.37";
+  const QR_LIB_URL = "/setup_codes_static/qr.js?v=0.1.38";
   const TABLE_SORT_KEY = "setup-codes-table-sort";
   const TABLE_GROUP_KEY = "setup-codes-table-grouping";
   const TABLE_COLLAPSE_KEY = "setup-codes-table-collapsed";
@@ -828,6 +828,28 @@
       blackColor: "#000000",
     });
     frame.hidden = false;
+  }
+
+  function extractedPairingLabel(protocol) {
+    if (protocol === "zwave") {
+      return "PIN";
+    }
+    if (protocol === "homekit") {
+      return "Setup code";
+    }
+    return "Pairing code";
+  }
+
+  function extractedPairingDisplay(protocol, raw) {
+    if (protocol === "zwave") {
+      return zwavePinFromSetupCode(raw) || "";
+    }
+    if (protocol === "homekit") {
+      const digits = homekitCodeFromXhm(raw);
+      return digits ? formatHomekitSetup(digits) : "";
+    }
+    const manual = matterPairingFromSetup(raw);
+    return manual ? formatMatterManual(manual) : "";
   }
 
   function validateMatterManualCode(raw) {
@@ -1752,6 +1774,30 @@
         dd.textContent = dash(value);
         meta.append(dt, dd);
       }
+
+      const protocol = record.protocol || "matter";
+      const storedCode = String(record.setup_code || "").trim();
+      const isZwave = protocol === "zwave";
+      const isHomekitQr =
+        protocol === "homekit" && storedCode.toUpperCase().startsWith("X-HM:");
+      const isMatterQr =
+        protocol === "matter" && storedCode.toUpperCase().startsWith("MT:");
+      const isMatterLong =
+        protocol === "matter" &&
+        !isMatterQr &&
+        storedCode.replace(/\D/g, "").length === 21;
+
+      let extractedValue;
+      if (isZwave || isHomekitQr || isMatterQr || isMatterLong) {
+        const dt = document.createElement("dt");
+        dt.textContent = extractedPairingLabel(protocol);
+        extractedValue = document.createElement("dd");
+        extractedValue.textContent = dash(
+          extractedPairingDisplay(protocol, record.setup_code)
+        );
+        meta.append(dt, extractedValue);
+      }
+
       if (recordInHomeAssistant(this._hass, record) && record.ha_device_id) {
         const dt = document.createElement("dt");
         dt.textContent = "Device";
@@ -1774,17 +1820,6 @@
       input.type = "text";
       input.autocomplete = "off";
       input.spellcheck = false;
-      const protocol = record.protocol || "matter";
-      const storedCode = String(record.setup_code || "").trim();
-      const isZwave = protocol === "zwave";
-      const isHomekitQr =
-        protocol === "homekit" && storedCode.toUpperCase().startsWith("X-HM:");
-      const isMatterQr =
-        protocol === "matter" && storedCode.toUpperCase().startsWith("MT:");
-      const isMatterLong =
-        protocol === "matter" &&
-        !isMatterQr &&
-        storedCode.replace(/\D/g, "").length === 21;
       if (isZwave) {
         inputLabel.textContent = "DSK / QR";
         input.value = formatZwaveDskOrQr(record.setup_code, "");
@@ -1811,41 +1846,11 @@
         }
       }
       inputLabel.append(input);
-
-      let pinLabel;
-      if (isZwave || isHomekitQr || isMatterQr || isMatterLong) {
-        pinLabel = document.createElement("label");
-        const pinInput = document.createElement("input");
-        pinInput.type = "text";
-        pinInput.readOnly = true;
-        pinInput.autocomplete = "off";
-        pinInput.spellcheck = false;
-        if (isZwave) {
-          pinLabel.textContent = "PIN";
-          pinInput.placeholder = "First 5 digits of the DSK";
-          pinInput.value = zwavePinFromSetupCode(record.setup_code) || "";
-        } else if (isHomekitQr) {
-          pinLabel.textContent = "Setup code";
-          pinInput.placeholder = "8-digit code for manual pairing";
-          const digits = homekitCodeFromXhm(record.setup_code);
-          pinInput.value = digits ? formatHomekitSetup(digits) : "";
-        } else {
-          pinLabel.textContent = "Pairing code";
-          pinInput.placeholder = "11-digit code for manual pairing";
-          const manual = matterPairingFromSetup(record.setup_code);
-          pinInput.value = manual ? formatMatterManual(manual) : "";
-        }
-        pinLabel.append(pinInput);
+      if (extractedValue) {
         input.addEventListener("input", () => {
-          if (isZwave) {
-            pinInput.value = zwavePinFromSetupCode(input.value) || "";
-          } else if (isHomekitQr) {
-            const digits = homekitCodeFromXhm(input.value);
-            pinInput.value = digits ? formatHomekitSetup(digits) : "";
-          } else {
-            const manual = matterPairingFromSetup(input.value);
-            pinInput.value = manual ? formatMatterManual(manual) : "";
-          }
+          extractedValue.textContent = dash(
+            extractedPairingDisplay(protocol, input.value)
+          );
         });
       }
 
@@ -1898,9 +1903,6 @@
       }
 
       dialog.append(title, meta, qrFrame);
-      if (pinLabel) {
-        dialog.append(pinLabel);
-      }
       dialog.append(inputLabel, notesLabel, error, actions);
       overlay.append(dialog);
       this.append(overlay);
