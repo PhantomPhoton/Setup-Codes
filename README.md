@@ -8,27 +8,27 @@ Home Assistant does not store Matter or HomeKit codes after commissioning. This 
 
 <img width="1702" height="680" alt="Edit Box" src="https://github.com/user-attachments/assets/1906eabb-1458-4a78-8576-528ee73edffc" />
 
-## Panel
+## Supported Protocols
 
-The table columns follow **Settings → Devices**: protocol brand icon, Device (name and labels), Area, Manufacturer, Model, Serial, Status, Setup Code. A copy icon next to a stored code copies it without opening the details dialog. On narrow / mobile the row is three lines (name + area + status, manufacturer / model / serial, setup code + copy) instead of stuffing every column into the secondary line. Sort, grouping, and collapsed groups are remembered in the browser (`localStorage`), like Settings → Devices.
+Which protocols to scan is chosen at install time and can be changed later under **Settings → Devices & services → Setup Codes → Configure**. Turning a protocol off stops adding new devices of that type. Records already in the list stay.
 
-- `hass-tabs-subpage-data-table` (search, sort, group, column settings)
-- `ha-filter-floor-areas` (floors / areas)
-- `ha-filter-states` (manufacturer, protocol, available / unavailable / removed, has a code or not)
+### Matter
 
-Those widgets are lazy-loaded with the devices dashboard. The panel preloads that config route so they exist even if you have not opened Settings → Devices in this session.
+Home Assistant does not keep the pairing code after commissioning, so you store it here. Paste an `MT:` QR payload or the **11-digit** code printed on the device (`XXXX-XXX-XXXX`). A 21-digit code is accepted too; the list shows the 11-digit code you type when pairing. Invalid checksums are rejected.
 
-Click a row to set or clear the code, edit notes, and open the matching Home Assistant device page. Delete is only offered for records that are no longer in Home Assistant. When the stored value is a scannable payload — Matter `MT:`, HomeKit `X-HM://`, a Z-Wave DSK, or a SmartStart `90…` string — the details dialog also shows a QR code. 11-digit / 21-digit Matter codes and 8-digit HomeKit codes are not QR payloads, so no code is drawn for those.
+An `MT:` payload also shows a QR in the details dialog. Typed 11- or 21-digit codes do not.
 
-Matter setup codes may be an `MT:` QR payload or an **11- or 21-digit manual pairing code**. The table always shows the **11-digit** code you type when pairing (`XXXX-XXX-XXXX`), extracted from an `MT:` QR or reduced from a 21-digit code (VID/PID dropped, check digit recomputed). The details dialog shows that pairing code plus the full `MT:` / 21-digit value. Manual codes have spaces/dashes stripped on save. The last digit is a Verhoeff checksum and the first digit must match the short vs long form.
+### HomeKit
 
-HomeKit setup codes may be an `X-HM://` QR payload or an **8-digit HAP setup code**. `X-HM://` payloads are decoded (9 base-36 characters packing the code, category, and pairing flags, plus a 4-character Setup ID). The table shows the extracted **8-digit** code (`XXX-XX-XXX`). The details dialog shows that setup code plus the full QR. Digits are stored without dashes. Spec-invalid codes (repeating digits, `12345678`, `87654321`) are rejected. Clearing either field is allowed.
+Home Assistant does not keep the setup code after pairing. Paste an `X-HM://` QR payload or the **8-digit** code (`XXX-XX-XXX`). Repeating digits, `12345678`, and `87654321` are rejected.
 
-Z-Wave setup codes may be a **40-digit DSK** (`aaaaa-bbbbb-ccccc-ddddd-eeeee-fffff-11111-22222`) or a **SmartStart QR** (digits starting with `90`). The table shows the **5-digit PIN** (first DSK group). The details dialog shows that PIN plus the full DSK / QR. When Z-Wave JS has a DSK for an S2-included node and the field is empty, the DSK is filled in automatically. A user-entered value is left alone. The Z-Wave controller node is not listed.
+An `X-HM://` payload also shows a QR in the details dialog. Typed 8-digit codes do not.
 
-## Settings
+### Z-Wave
 
-**Settings → Devices & services → Setup Codes → Configure** (or the same toggles during first setup) chooses which protocols to scan: Matter, HomeKit, and Z-Wave. Turning a protocol off stops adding new devices of that type. Records already in the list stay.
+For S2-included nodes, the **DSK** is copied in when the field is empty. You can also paste a **SmartStart QR** (digits starting with `90`). The list shows the **5-digit PIN** (first DSK group); the details dialog has the full DSK or QR plus a scannable QR code.
+
+The Z-Wave controller is not listed. A value you entered yourself is left alone.
 
 ## Installation
 
