@@ -20,7 +20,7 @@ Those widgets are lazy-loaded with the devices dashboard. The panel preloads tha
 
 Click a row to set or clear the code, edit notes, and open the matching Home Assistant device page. Delete is only offered for records that are no longer in Home Assistant.
 
-Matter setup codes may be an `MT:` QR payload (stored as-is, not validated yet) or an **11- or 21-digit manual pairing code**. Manual codes have spaces/dashes stripped on save; 11-digit codes are shown as `XXXX-XXX-XXXX` in the panel. The last digit is a Verhoeff checksum and the first digit must match the short vs long form.
+Matter setup codes may be an `MT:` QR payload or an **11- or 21-digit manual pairing code**. The table always shows the **11-digit** code you type when pairing (`XXXX-XXX-XXXX`), extracted from an `MT:` QR or reduced from a 21-digit code (VID/PID dropped, check digit recomputed). The details dialog shows that pairing code plus the full `MT:` / 21-digit value. Manual codes have spaces/dashes stripped on save. The last digit is a Verhoeff checksum and the first digit must match the short vs long form.
 
 HomeKit setup codes may be an `X-HM://` QR payload (stored as-is, not validated yet) or an **8-digit HAP setup code**. Digits are stored without dashes and shown as `XXX-XX-XXX`. Spec-invalid codes (repeating digits, `12345678`, `87654321`) are rejected. Clearing either field is allowed.
 

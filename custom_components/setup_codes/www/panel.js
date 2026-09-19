@@ -390,6 +390,172 @@
     return String(raw).trim();
   }
 
+  const BASE38_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-.";
+  const MATTER_INVALID_PASSCODES = new Set([
+    0, 11111111, 22222222, 33333333, 44444444, 55555555, 66666666, 77777777,
+    88888888, 99999999, 12345678, 87654321,
+  ]);
+
+  function base38Decode(encoded) {
+    const payload = String(encoded || "").toUpperCase();
+    if (!payload) {
+      return null;
+    }
+    const out = [];
+    let index = 0;
+    while (index < payload.length) {
+      const remaining = payload.length - index;
+      let chars;
+      let nbytes;
+      if (remaining >= 5) {
+        chars = 5;
+        nbytes = 3;
+      } else if (remaining === 4) {
+        chars = 4;
+        nbytes = 2;
+      } else if (remaining === 2) {
+        chars = 2;
+        nbytes = 1;
+      } else {
+        return null;
+      }
+      let value = 0;
+      for (let offset = chars; offset > 0; offset -= 1) {
+        const digit = BASE38_ALPHABET.indexOf(payload[index + offset - 1]);
+        if (digit < 0) {
+          return null;
+        }
+        value = value * 38 + digit;
+      }
+      index += chars;
+      for (let byteIndex = 0; byteIndex < nbytes; byteIndex += 1) {
+        out.push(value & 0xff);
+        value = Math.floor(value / 256);
+      }
+      if (value) {
+        return null;
+      }
+    }
+    return out;
+  }
+
+  function readBits(data, start, length) {
+    let value = 0;
+    for (let bit = 0; bit < length; bit += 1) {
+      const position = start + bit;
+      const byteIndex = Math.floor(position / 8);
+      if (byteIndex >= data.length) {
+        break;
+      }
+      if (data[byteIndex] & (1 << (position % 8))) {
+        value |= 1 << bit;
+      }
+    }
+    return value;
+  }
+
+  function parseMtPayload(raw) {
+    const stripped = String(raw || "").trim();
+    if (!stripped.toUpperCase().startsWith("MT:")) {
+      return null;
+    }
+    let encoded = stripped.slice(3).trim().split("*")[0].trim();
+    if (encoded.includes("%")) {
+      encoded = encoded.split("%")[0].trim();
+    }
+    const data = base38Decode(encoded);
+    if (!data || data.length < 11) {
+      return null;
+    }
+    let offset = 0;
+    const version = readBits(data, offset, 3);
+    offset += 3;
+    const vendorId = readBits(data, offset, 16);
+    offset += 16;
+    const productId = readBits(data, offset, 16);
+    offset += 16;
+    const flow = readBits(data, offset, 2);
+    offset += 2;
+    offset += 8;
+    const discriminator = readBits(data, offset, 12);
+    offset += 12;
+    const passcode = readBits(data, offset, 27);
+    offset += 27;
+    const padding = readBits(data, offset, 4);
+    if (version !== 0 || padding !== 0) {
+      return null;
+    }
+    if (passcode > 99999998 || MATTER_INVALID_PASSCODES.has(passcode)) {
+      return null;
+    }
+    return { vendorId, productId, flow, discriminator, passcode };
+  }
+
+  const VERHOEFF_INV = [0, 4, 3, 2, 1, 5, 6, 7, 8, 9];
+
+  function verhoeffCheckDigit(digits) {
+    let checksum = 0;
+    const withPlaceholder = `${digits}0`.split("").reverse();
+    for (let index = 0; index < withPlaceholder.length; index += 1) {
+      checksum =
+        VERHOEFF_D[checksum][VERHOEFF_P[index % 8][Number(withPlaceholder[index])]];
+    }
+    return String(VERHOEFF_INV[checksum]);
+  }
+
+  function encodeMatterManualCode(discriminator, passcode) {
+    const chunk1 = discriminator >> 10;
+    const chunk2 = ((discriminator & 0x300) << 6) | (passcode & 0x3fff);
+    const chunk3 = passcode >> 14;
+    const payload = `${chunk1}${String(chunk2).padStart(5, "0")}${String(chunk3).padStart(4, "0")}`;
+    return payload + verhoeffCheckDigit(payload);
+  }
+
+  function shortMatterManualFromDigits(digits) {
+    if (digits.length === 11) {
+      return validateMatterManualCode(digits) ? null : digits;
+    }
+    if (digits.length !== 21 || validateMatterManualCode(digits)) {
+      return null;
+    }
+    const payload = `${Number(digits[0]) & 0b0011}${digits.slice(1, 10)}`;
+    const shortCode = payload + verhoeffCheckDigit(payload);
+    return validateMatterManualCode(shortCode) ? null : shortCode;
+  }
+
+  function matterManualFromMt(raw) {
+    const parsed = parseMtPayload(raw);
+    if (!parsed) {
+      return null;
+    }
+    const digits = encodeMatterManualCode(parsed.discriminator, parsed.passcode);
+    return validateMatterManualCode(digits) ? null : digits;
+  }
+
+  function matterPairingFromSetup(raw) {
+    const stripped = String(raw || "").trim();
+    if (!stripped) {
+      return null;
+    }
+    if (stripped.toUpperCase().startsWith("MT:")) {
+      return matterManualFromMt(stripped);
+    }
+    if (stripped.replace(/[\d\s.-]/g, "")) {
+      return null;
+    }
+    return shortMatterManualFromDigits(stripped.replace(/\D/g, ""));
+  }
+
+  function formatMatterManual(digits) {
+    if (!digits) {
+      return "";
+    }
+    if (digits.length === 11) {
+      return `${digits.slice(0, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`;
+    }
+    return digits;
+  }
+
   function formatSetupCode(protocol, raw, empty) {
     const blank = empty === undefined ? "—" : empty;
     if (raw == null || String(raw).trim() === "") {
@@ -409,6 +575,10 @@
     }
     if (proto === "zwave") {
       return zwavePinFromSetupCode(stripped) || blank;
+    }
+    const manual = matterPairingFromSetup(stripped);
+    if (manual) {
+      return formatMatterManual(manual);
     }
     if (stripped.toUpperCase().startsWith("MT:")) {
       return stripped;
@@ -523,7 +693,9 @@
       return null;
     }
     if (stripped.toUpperCase().startsWith("MT:")) {
-      // TODO: validate MT: QR payload and extract the 11/21-digit manual pairing code
+      if (!matterManualFromMt(stripped)) {
+        return "This is not a valid Matter MT: QR payload.";
+      }
       return null;
     }
     const leftover = stripped.replace(/[\d\s.-]/g, "");
@@ -1459,10 +1631,26 @@
       input.autocomplete = "off";
       input.spellcheck = false;
       const isZwave = record.protocol === "zwave";
+      const storedCode = String(record.setup_code || "").trim();
+      const isMatterQr =
+        (record.protocol || "matter") === "matter" &&
+        storedCode.toUpperCase().startsWith("MT:");
+      const isMatterLong =
+        (record.protocol || "matter") === "matter" &&
+        !isMatterQr &&
+        storedCode.replace(/\D/g, "").length === 21;
       if (isZwave) {
         inputLabel.textContent = "DSK / QR";
         input.value = formatZwaveDskOrQr(record.setup_code, "");
         input.placeholder = "90… SmartStart QR or 40-digit DSK";
+      } else if (isMatterQr) {
+        inputLabel.textContent = "QR";
+        input.value = storedCode;
+        input.placeholder = "MT:… Matter QR payload";
+      } else if (isMatterLong) {
+        inputLabel.textContent = "Setup code";
+        input.value = storedCode.replace(/\D/g, "");
+        input.placeholder = "MT:… or 11/21-digit Matter pairing code";
       } else {
         inputLabel.textContent = "Setup code";
         input.value = formatSetupCode(record.protocol, record.setup_code, "");
@@ -1475,19 +1663,31 @@
       inputLabel.append(input);
 
       let pinLabel;
-      if (isZwave) {
+      if (isZwave || isMatterQr || isMatterLong) {
         pinLabel = document.createElement("label");
-        pinLabel.textContent = "PIN";
+        pinLabel.textContent = isZwave ? "PIN" : "Pairing code";
         const pinInput = document.createElement("input");
         pinInput.type = "text";
         pinInput.readOnly = true;
         pinInput.autocomplete = "off";
         pinInput.spellcheck = false;
-        pinInput.placeholder = "First 5 digits of the DSK";
-        pinInput.value = zwavePinFromSetupCode(record.setup_code) || "";
+        pinInput.placeholder = isZwave
+          ? "First 5 digits of the DSK"
+          : "11-digit code for manual pairing";
+        if (isZwave) {
+          pinInput.value = zwavePinFromSetupCode(record.setup_code) || "";
+        } else {
+          const manual = matterPairingFromSetup(record.setup_code);
+          pinInput.value = manual ? formatMatterManual(manual) : "";
+        }
         pinLabel.append(pinInput);
         input.addEventListener("input", () => {
-          pinInput.value = zwavePinFromSetupCode(input.value) || "";
+          if (isZwave) {
+            pinInput.value = zwavePinFromSetupCode(input.value) || "";
+          } else {
+            const manual = matterPairingFromSetup(input.value);
+            pinInput.value = manual ? formatMatterManual(manual) : "";
+          }
         });
       }
 
