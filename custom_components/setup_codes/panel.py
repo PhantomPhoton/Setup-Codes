@@ -56,6 +56,7 @@ async def async_register_static(hass: HomeAssistant) -> None:
 
 async def async_register_panel(hass: HomeAssistant) -> None:
     """Add the sidebar item."""
+    version = await hass.async_add_executor_job(static_asset_version)
     if PANEL_URL_PATH in hass.data.get("frontend_panels", {}):
         frontend.async_remove_panel(hass, PANEL_URL_PATH)
     frontend.async_register_built_in_panel(
@@ -70,7 +71,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
                 "embed_iframe": False,
                 "trust_external": False,
                 "handle_safe_area": True,
-                "js_url": f"{PANEL_STATIC_URL_PATH}/panel.js?v={static_asset_version()}",
+                "js_url": f"{PANEL_STATIC_URL_PATH}/panel.js?v={version}",
             }
         },
         require_admin=True,
