@@ -803,7 +803,9 @@
       if (!matterManualFromMt(stripped)) {
         return null;
       }
-      return `MT:${stripped.slice(3).trim()}`;
+      // Matter payloads are uppercase Base38. Lowercase input would force the QR
+      // encoder out of alphanumeric mode and back up to a larger version.
+      return `MT:${stripped.slice(3).trim()}`.toUpperCase();
     }
     if (proto === "homekit") {
       const parsed = parseXhmPayload(stripped);
@@ -824,14 +826,17 @@
     return null;
   }
 
-  function paintSetupQr(frame, payload) {
+  function paintSetupQr(frame, payload, protocol) {
     if (!payload || !window.SetupCodesQR) {
       frame.hidden = true;
       frame.replaceChildren();
       return;
     }
     frame.innerHTML = window.SetupCodesQR.renderSVG(payload, {
-      ecc: "M",
+      // Matter QR codes use error correction level L, which keeps the code at
+      // Version 1 (21x21, three finder squares, no alignment pattern). At M the
+      // payload no longer fits Version 1 and grows to Version 2.
+      ecc: (protocol || "matter") === "matter" ? "L" : "M",
       border: 2,
       pixelSize: 1,
       whiteColor: "#ffffff",
@@ -1868,7 +1873,11 @@
       qrFrame.className = "setup-codes-qr";
       qrFrame.hidden = true;
       const refreshQr = () => {
-        paintSetupQr(qrFrame, qrPayloadFromSetup(protocol, input.value));
+        paintSetupQr(
+          qrFrame,
+          qrPayloadFromSetup(protocol, input.value),
+          protocol,
+        );
       };
       input.addEventListener("input", refreshQr);
       void loadQrLibrary().then(refreshQr).catch(() => {});
