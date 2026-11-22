@@ -12,6 +12,11 @@
   const TABLE_SORT_KEY = "setup-codes-table-sort";
   const TABLE_GROUP_KEY = "setup-codes-table-grouping";
   const TABLE_COLLAPSE_KEY = "setup-codes-table-collapsed";
+  const BACKUP_OPTIONS_KEY = "setup-codes-backup-options";
+  // Countries that print on US Letter. Everyone else defaults to A4.
+  const LETTER_COUNTRIES = new Set(
+    "US CA MX CL CO CR DO GT PA PH PR SV VE".split(" ")
+  );
   const GROUPABLE_COLUMNS = ["area", "manufacturer", "model", "status"];
   const NEEDED = [
     "hass-tabs-subpage-data-table",
@@ -751,44 +756,49 @@
     return null;
   }
 
-  let qrLibPromise;
+  const libraryPromises = new Map();
 
-  function qrLibraryUrl() {
+  function staticAssetUrl(file) {
     const scripts = document.getElementsByTagName("script");
     for (let index = 0; index < scripts.length; index += 1) {
       const src = scripts[index].src || "";
       if (src.includes("/setup_codes_static/panel.js")) {
-        return src.replace("panel.js", "qr.js");
+        return src.replace("panel.js", file);
       }
     }
-    return "/setup_codes_static/qr.js";
+    return `/setup_codes_static/${file}`;
   }
 
-  function loadQrLibrary() {
-    if (window.SetupCodesQR) {
-      return Promise.resolve(window.SetupCodesQR);
+  function loadStaticLibrary(file, globalName) {
+    if (window[globalName]) {
+      return Promise.resolve(window[globalName]);
     }
-    if (qrLibPromise) {
-      return qrLibPromise;
+    if (libraryPromises.has(file)) {
+      return libraryPromises.get(file);
     }
-    qrLibPromise = new Promise((resolve, reject) => {
+    const promise = new Promise((resolve, reject) => {
       const script = document.createElement("script");
-      script.src = qrLibraryUrl();
+      script.src = staticAssetUrl(file);
       script.onload = () => {
-        if (window.SetupCodesQR) {
-          resolve(window.SetupCodesQR);
+        if (window[globalName]) {
+          resolve(window[globalName]);
         } else {
-          reject(new Error("QR library missing"));
+          reject(new Error(`${file} missing`));
         }
       };
-      script.onerror = () => reject(new Error("QR library failed to load"));
+      script.onerror = () => reject(new Error(`${file} failed to load`));
       document.head.append(script);
     }).catch((err) => {
-      qrLibPromise = undefined;
+      libraryPromises.delete(file);
       throw err;
     });
-    return qrLibPromise;
+    libraryPromises.set(file, promise);
+    return promise;
   }
+
+  const loadQrLibrary = () => loadStaticLibrary("qr.js", "SetupCodesQR");
+  const loadBackupLibrary = () =>
+    loadStaticLibrary("backup.js", "SetupCodesBackup");
 
   function qrPayloadFromSetup(protocol, raw) {
     const stripped = String(raw || "").trim();
@@ -826,23 +836,97 @@
     return null;
   }
 
+  function qrSvgFor(payload, protocol, border) {
+    return window.SetupCodesQR.renderSVG(payload, {
+      // Matter QR codes use error correction level L, which keeps the code at
+      // Version 1 (21x21, three finder squares, no alignment pattern). At M the
+      // payload no longer fits Version 1 and grows to Version 2.
+      ecc: (protocol || "matter") === "matter" ? "L" : "M",
+      border,
+      pixelSize: 1,
+      whiteColor: "#ffffff",
+      blackColor: "#000000",
+    });
+  }
+
   function paintSetupQr(frame, payload, protocol) {
     if (!payload || !window.SetupCodesQR) {
       frame.hidden = true;
       frame.replaceChildren();
       return;
     }
-    frame.innerHTML = window.SetupCodesQR.renderSVG(payload, {
-      // Matter QR codes use error correction level L, which keeps the code at
-      // Version 1 (21x21, three finder squares, no alignment pattern). At M the
-      // payload no longer fits Version 1 and grows to Version 2.
-      ecc: (protocol || "matter") === "matter" ? "L" : "M",
-      border: 2,
-      pixelSize: 1,
-      whiteColor: "#ffffff",
-      blackColor: "#000000",
-    });
+    frame.innerHTML = qrSvgFor(payload, protocol, 2);
     frame.hidden = false;
+  }
+
+  // What a person types when pairing. Z-Wave shows the full DSK here, not just
+  // the 5-digit PIN the table lists, because the DSK is what gets lost.
+  function backupSecretText(protocol, stored) {
+    if (protocol === "zwave") {
+      const dsk = zwaveDskDigits(stored);
+      if (!dsk) {
+        return stored;
+      }
+      const groups = dsk.match(/.{5}/g);
+      return `${groups.slice(0, 4).join("-")}-\n${groups.slice(4).join("-")}`;
+    }
+    return formatSetupCode(protocol, stored, stored);
+  }
+
+  // The stored value itself, when it is short enough to print and differs from
+  // the typed code (MT: / X-HM:// payloads and 21-digit Matter codes).
+  function backupDetailText(protocol, stored, secret) {
+    if (protocol === "zwave") {
+      return "";
+    }
+    const upper = stored.toUpperCase();
+    const digits = stored.replace(/\D/g, "");
+    let detail = "";
+    if (upper.startsWith("MT:") || upper.startsWith("X-HM:")) {
+      detail = stored;
+    } else if (protocol === "matter" && digits.length === 21) {
+      detail = digits;
+    }
+    return detail === secret ? "" : detail;
+  }
+
+  function backupCardFromRecord(record) {
+    const stored = String(record.setup_code || "").trim();
+    if (!stored) {
+      return null;
+    }
+    const protocol = record.protocol || "matter";
+    const payload = qrPayloadFromSetup(protocol, stored);
+    let qrSvg = null;
+    if (payload && window.SetupCodesQR) {
+      try {
+        // Four modules of quiet zone, the QR spec's minimum, so printed codes
+        // scan reliably even when the cell border sits close.
+        qrSvg = qrSvgFor(payload, protocol, 4);
+      } catch (_err) {
+        qrSvg = null;
+      }
+    }
+    const secret = backupSecretText(protocol, stored);
+    return {
+      name: record.name || "Device",
+      protocol: record.protocol_label || record.protocol || "",
+      secret,
+      detail: backupDetailText(protocol, stored, secret),
+      qrSvg,
+    };
+  }
+
+  function defaultBackupPaper(hass) {
+    const country = String(hass?.config?.country || "").toUpperCase();
+    if (country) {
+      return LETTER_COUNTRIES.has(country) ? "letter" : "a4";
+    }
+    return hass?.config?.unit_system?.length === "mi" ? "letter" : "a4";
+  }
+
+  function plural(count, one, many) {
+    return `${count} ${count === 1 ? one : many}`;
   }
 
   function extractedPairingLabel(protocol) {
@@ -1224,14 +1308,27 @@
         this._onFilterExpanded(ev, codeFilter)
       );
 
+      const backupButton = document.createElement("ha-icon-button");
+      backupButton.slot = "toolbar-icon";
+      backupButton.label = "Print backup";
+      const backupIcon = document.createElement("ha-icon");
+      backupIcon.icon = "mdi:printer";
+      backupButton.append(backupIcon);
+      backupButton.addEventListener("click", () => this._openBackupDialog());
+      this._backupButton = backupButton;
+
       table.append(
         areaFilter,
         manufacturerFilter,
         protocolFilter,
         statusFilter,
-        codeFilter
+        codeFilter,
+        backupButton
       );
       this.append(table);
+      void Promise.resolve(table.updateComplete).then(() =>
+        this._ensureBackupButtonVisible()
+      );
 
       this._table = table;
       this._syncTableLayout();
@@ -1930,6 +2027,230 @@
       input.focus();
     }
 
+    _ensureBackupButtonVisible() {
+      const button = this._backupButton;
+      if (!button || !button.isConnected || button.assignedSlot) {
+        return;
+      }
+      // This Home Assistant build does not render the table's toolbar slot.
+      // Float the button over the panel so the feature stays reachable.
+      button.slot = "";
+      button.style.cssText =
+        "position:absolute;right:16px;bottom:16px;z-index:5;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3);background:var(--primary-color);color:var(--text-primary-color,#fff);--ha-icon-button-size:48px;";
+      this.style.position = "relative";
+      this.append(button);
+    }
+
+    _backupSummary() {
+      let withCode = 0;
+      let withoutQr = 0;
+      for (const record of this._devices) {
+        const stored = String(record.setup_code || "").trim();
+        if (!stored) {
+          continue;
+        }
+        withCode += 1;
+        if (!qrPayloadFromSetup(record.protocol || "matter", stored)) {
+          withoutQr += 1;
+        }
+      }
+      return {
+        withCode,
+        withoutCode: this._devices.length - withCode,
+        withoutQr,
+      };
+    }
+
+    _backupCards() {
+      const sorted = [...this._devices].sort((a, b) =>
+        (a.name || "").localeCompare(b.name || "", undefined, {
+          sensitivity: "base",
+          numeric: true,
+        })
+      );
+      const cards = [];
+      for (const record of sorted) {
+        const card = backupCardFromRecord(record);
+        if (card) {
+          cards.push(card);
+        }
+      }
+      return cards;
+    }
+
+    _openBackupDialog() {
+      this._closeDialog();
+      const summary = this._backupSummary();
+      const saved = readTablePref(BACKUP_OPTIONS_KEY) || {};
+      const defaultPaper = defaultBackupPaper(this._hass);
+
+      const overlay = document.createElement("div");
+      overlay.className = "setup-codes-dialog-overlay";
+      overlay.addEventListener("click", (ev) => {
+        if (ev.target === overlay) {
+          this._closeDialog();
+        }
+      });
+
+      const dialog = document.createElement("div");
+      dialog.className = "setup-codes-dialog";
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+
+      const title = document.createElement("h2");
+      title.textContent = "Print backup";
+
+      const intro = document.createElement("p");
+      intro.className = "setup-codes-note";
+      intro.textContent =
+        "Makes a printable sheet with each device's QR code, setup code and name. In the print dialog, send it to a printer or choose “Save as PDF” to keep a digital copy.";
+
+      const makeSelect = (labelText, choices, value) => {
+        const label = document.createElement("label");
+        label.textContent = labelText;
+        const select = document.createElement("select");
+        for (const [optionValue, optionLabel] of choices) {
+          const option = document.createElement("option");
+          option.value = optionValue;
+          option.textContent = optionLabel;
+          select.append(option);
+        }
+        select.value = value;
+        label.append(select);
+        return { label, select };
+      };
+
+      const perPage = makeSelect(
+        "Codes per page",
+        [
+          ["12", "12 per page (3 × 4, larger QR codes)"],
+          ["16", "16 per page (4 × 4)"],
+        ],
+        String(saved.perPage) === "16" ? "16" : "12"
+      );
+      const paper = makeSelect(
+        "Paper size",
+        [
+          ["a4", "A4"],
+          ["letter", "US Letter"],
+        ],
+        saved.paper === "a4" || saved.paper === "letter"
+          ? saved.paper
+          : defaultPaper
+      );
+
+      const info = document.createElement("div");
+      info.className = "setup-codes-note";
+      const lines = [];
+      if (summary.withCode) {
+        lines.push(
+          `${plural(summary.withCode, "device", "devices")} will be included.`
+        );
+      } else {
+        lines.push(
+          "No device has a setup code yet, so there is nothing to print."
+        );
+      }
+      if (summary.withoutQr && summary.withCode) {
+        lines.push(
+          `${plural(summary.withoutQr, "device has", "devices have")} no QR code stored (only the setup code is printed).`
+        );
+      }
+      if (summary.withoutCode) {
+        lines.push(
+          `${plural(summary.withoutCode, "device has", "devices have")} no setup code and ${summary.withoutCode === 1 ? "is" : "are"} left out.`
+        );
+      }
+      info.textContent = lines.join(" ");
+
+      const warning = document.createElement("div");
+      warning.className = "setup-codes-note";
+      warning.textContent =
+        "The printout contains your pairing codes. Keep it somewhere safe.";
+
+      const actions = document.createElement("div");
+      actions.className = "setup-codes-actions";
+
+      const print = document.createElement("button");
+      print.type = "button";
+      print.className = "primary";
+      print.textContent = "Print / Save as PDF";
+      print.disabled = !summary.withCode;
+      print.addEventListener("click", () => {
+        const options = {
+          perPage: Number(perPage.select.value) === 16 ? 16 : 12,
+          paper: paper.select.value === "letter" ? "letter" : "a4",
+        };
+        writeTablePref(BACKUP_OPTIONS_KEY, options);
+        void this._printBackup(options, print);
+      });
+
+      const close = document.createElement("button");
+      close.type = "button";
+      close.textContent = "Close";
+      close.addEventListener("click", () => this._closeDialog());
+
+      actions.append(print, close);
+      dialog.append(
+        title,
+        intro,
+        perPage.label,
+        paper.label,
+        info,
+        warning,
+        actions
+      );
+      overlay.append(dialog);
+      this.append(overlay);
+      this._dialog = overlay;
+      this._injectDialogStyles();
+      print.focus();
+    }
+
+    async _printBackup(options, button) {
+      // Open the window straight from the click so pop-up blockers allow it,
+      // then fill it once the libraries are loaded.
+      const win = window.open("", "_blank");
+      if (!win) {
+        notify(
+          this,
+          "The browser blocked the print window. Allow pop-ups for Home Assistant and try again."
+        );
+        return;
+      }
+      if (button) {
+        button.disabled = true;
+      }
+      try {
+        win.document.title = "Preparing Setup Codes backup…";
+        win.document.body.textContent = "Preparing Setup Codes backup…";
+      } catch (_err) {
+        /* cosmetic only */
+      }
+      try {
+        const [, backup] = await Promise.all([
+          loadQrLibrary(),
+          loadBackupLibrary(),
+        ]);
+        const cards = this._backupCards();
+        if (!cards.length) {
+          win.close();
+          notify(this, "No setup codes to print");
+          return;
+        }
+        const { html } = backup.buildDocument(cards, options);
+        backup.show(win, html);
+        this._closeDialog();
+      } catch (err) {
+        win.close();
+        notify(this, err?.message || "Could not create the backup");
+      } finally {
+        if (button) {
+          button.disabled = false;
+        }
+      }
+    }
+
     _injectDialogStyles() {
       if (this.querySelector("style[data-setup-codes]")) {
         return;
@@ -2008,6 +2329,7 @@
           color: var(--secondary-text-color);
         }
         .setup-codes-dialog input,
+        .setup-codes-dialog select,
         .setup-codes-dialog textarea {
           font: inherit;
           color: var(--primary-text-color);
@@ -2019,6 +2341,15 @@
         .setup-codes-dialog textarea {
           min-height: 72px;
           resize: vertical;
+        }
+        .setup-codes-note {
+          margin: 0 0 12px;
+          font-size: var(--ha-font-size-s, 12px);
+          color: var(--secondary-text-color);
+        }
+        .setup-codes-actions button:disabled {
+          opacity: 0.5;
+          cursor: default;
         }
         .setup-codes-error {
           color: var(--error-color, #db4437);

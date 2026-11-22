@@ -18,7 +18,7 @@ from .const import (
 
 WWW_DIR = Path(__file__).parent / "www"
 _STATIC_REGISTERED = False
-_WWW_FILES = ("panel.js", "qr.js")
+_WWW_FILES = ("panel.js", "qr.js", "backup.js")
 
 
 def static_asset_version() -> str:

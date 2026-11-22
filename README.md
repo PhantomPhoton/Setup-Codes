@@ -63,6 +63,17 @@ Setup Codes requires a Home Assistant **administrator**, the same privilege need
 
 Records live in Home Assistant `Store` (`.storage/setup_codes`), not Recorder. Setup codes are not written to logs. Setup codes are backed up as part of the standard Home Assistant backup system.
 
+## Printing a backup
+
+A Home Assistant backup keeps your codes, but a paper or PDF copy is handy when Home Assistant itself is what you are rebuilding. Click the **printer icon** in the panel's top bar, choose a layout, and the panel opens a printable sheet and your browser's print dialog.
+
+* **12 or 16 codes per page** (3 × 4 or 4 × 4) on **A4** or **US Letter**. The paper size defaults from your Home Assistant country, and your choices are remembered in the browser.
+* Each card has the **QR code**, the **device name**, the protocol, and the code you would type when pairing: the 11-digit Matter code, the 8-digit HomeKit code, or the full Z-Wave DSK. A stored `MT:` or `X-HM://` payload is printed in small type underneath as well.
+* Devices without a setup code are left out. If you only typed in an 11-digit Matter or 8-digit HomeKit code there is no QR payload to draw, so the card shows the code and "No QR code stored". Paste the `MT:` or `X-HM://` payload to get a QR.
+* Choose **Save as PDF** as the destination in the print dialog to keep a digital copy.
+
+The sheet is built in your browser and is not sent anywhere, but it contains your pairing codes, so keep the printout somewhere safe. Your browser needs to allow pop-ups from Home Assistant. The Home Assistant companion apps may not support printing; use a regular browser if nothing happens.
+
 ## Thanks
 
 QR codes in the panel are generated with [uqr](https://github.com/unjs/uqr) (MIT), which builds on [Nayuki’s QR Code generator](https://www.nayuki.io/page/qr-code-generator-library). Thanks to Project Nayuki and Anthony Fu.
